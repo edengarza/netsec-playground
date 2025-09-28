@@ -1,4 +1,5 @@
-use des::{initial_permutation, inverted_permutation};
+use rand::Rng;
+use des::{initial_permutation, inverted_permutation, generate_key_schedule};
 
 fn print_bytes(value: &u64) {
     // print out one byte per line
@@ -18,22 +19,56 @@ fn print_bytes(value: &u64) {
         // print a newline after each byte
         println!();
     }
+
+    // print a newline after the block
+    println!();
+}
+
+fn test_permutation_and_back() {
+    // create the rng
+    let mut rng = rand::rng();
+    let mut failed = false;
+    let test_count = 100;
+
+    // test many values
+    for test_idx in 0..test_count {
+        // gen() generates a value between 0 and u64::MAX
+        let value: u64 = rng.random();
+        let permuted = initial_permutation(&value);
+        let inverted = inverted_permutation(&permuted);
+
+        // on issue, break with good prints
+        if value != inverted {
+            println!("[{}] Failed on value {}", test_idx, value);
+            print_bytes(&value);
+            print_bytes(&inverted);
+            failed = true;
+        }
+    }
+
+    // end print in case all is good
+    if !failed {
+        println!("Passed {} permutation tests successfully!", test_count);
+    }
+}
+
+fn test_key_schedule() {
+    // create the key
+    let mut rng = rand::rng();
+    let key: u64 = rng.random();
+    println!("Using the following key:");
+    print_bytes(&key);
+
+    let key_schedule = generate_key_schedule(&key);
+
+    for i in 0..16 {
+        println!("Iteration {}", i);
+        print_bytes(&key_schedule[i]);
+    }
 }
 
 fn main() {
     println!("Howdy! Welcome to testing DES :3\n");
-
-    let test: u64 = 1;
-    println!("The value being permuted and back is {}", test);
-
-    println!("Initial bytes:");
-    print_bytes(&test);
-
-    let permuted_test = initial_permutation(&test);
-    println!("Bytes after permutation:");
-    print_bytes(&permuted_test);
-
-    let inverted_test = inverted_permutation(&permuted_test);
-    println!("Bytes after inversion:");
-    print_bytes(&inverted_test);
+    test_permutation_and_back();
+    test_key_schedule();
 }
