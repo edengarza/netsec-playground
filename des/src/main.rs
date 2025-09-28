@@ -1,5 +1,5 @@
 use rand::Rng;
-use des::{initial_permutation, inverted_permutation, generate_key_schedule};
+use des::{initial_permutation, inverted_permutation, generate_key_schedule, encipher_block};
 
 fn print_bytes(value: &u64) {
     // print out one byte per line
@@ -61,14 +61,32 @@ fn test_key_schedule() {
 
     let key_schedule = generate_key_schedule(&key);
 
-    for i in 0..16 {
-        println!("Iteration {}", i);
-        print_bytes(&key_schedule[i]);
-    }
+    //for i in 0..16 {
+    //    println!("Iteration {}", i);
+    //    print_bytes(&key_schedule[i]);
+    //}
+}
+
+fn test_encipher() {
+    // create a random key
+    let mut rng = rand::rng();
+    let key: u64 = rng.random();
+    println!("Using the following key:");
+    print_bytes(&key);
+
+    // message to encipher
+    let msg: u32 = 1;
+    println!("Using the following message:");
+    print_bytes(&(msg as u64));
+
+    let ciphertext = encipher_block(&msg, &key);
+    println!("Resulting ciphertext:");
+    print_bytes(&(ciphertext as u64));
 }
 
 fn main() {
     println!("Howdy! Welcome to testing DES :3\n");
     test_permutation_and_back();
     test_key_schedule();
+    test_encipher();
 }
