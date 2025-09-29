@@ -185,6 +185,7 @@ fn permute_block_48(block: &u64, permutation_vector: &[u8; 48]) -> u64 {
 
 }
 
+// permute a 32 bit value into another 32 bit value
 fn permute_block_32(block: &u32, permutation_vector: &[u8; 32]) -> u32 {
     let mut permuted_block: u32 = 0;
 
@@ -259,6 +260,7 @@ fn concatenate_28_bit_blocks(c: &u32, d: &u32) -> u64 {
     combined
 }
 
+// takes a series of 8 groups of 4 bits and forms a 32 bit value
 fn concatenate_4_bit_blocks(blocks: &[u8; 8]) -> u32 {
     let mut combined: u32 = 0;
 
@@ -338,6 +340,30 @@ fn reduce_bit_group(bit_group: &u8, lookup_table: &[u8; 64]) -> u8 {
     value
 }
 
+// function to break a 64 bit value into two 32 bit values
+fn divide_64_bit_block(block: &u64) -> (u32, u32) {
+    let right: u32 = *block as u32;
+    let left: u32 = (block >> 32) as u32;
+
+    (left, right)
+}
+
+// function to combine two 32 bit values into a 64 bit value
+fn combine_2_32_bit_blocks(left: &u32, right: &u32) -> u64 {
+    let mut output: u64 = 0;
+
+    // add the left side first
+    output |= *left as u64;
+
+    // shift bits into position
+    output <<= 32;
+
+    // add the right side
+    output |= *right as u64;
+
+    output
+}
+
 // function to compute the initial permutation
 pub fn initial_permutation(input_block: &u64) -> u64 {
     permute_block_64(&input_block, &IP)
@@ -384,7 +410,7 @@ pub fn generate_key_schedule(key: &u64) -> [u64; 16] {
 }
 
 // function to encipher a 32 bit block with a 48 bit key
-pub fn encipher_block(block: &u32, key: &u64) -> u32 {
+pub fn cipher_function(block: &u32, key: &u64) -> u32 {
     let mut reduced_bit_groups: [u8; 8] = [0; 8];
 
     // expand the given block to match the key length
@@ -406,6 +432,42 @@ pub fn encipher_block(block: &u32, key: &u64) -> u32 {
 
     // perform final permutation
     let output: u32 = permute_block_32(&preoutput, &CIPHER_PERMUTATION);
+
+    output
+}
+
+// main encryption function
+// takes a 64 bit block and a precomputed key schedule
+// to produce a 64 bit ciphertext
+pub fn encipher_block(block: &u64, key_schedule: &[u64; 16]) -> u64 {
+    let mut left: u32;
+    let mut right: u32;
+
+    // perform the initial permutation
+    let initial_permutation_block = initial_permutation(&block);
+
+    // get the initial left and right components
+    (left, right) = divide_64_bit_block(&initial_permutation_block);
+
+    // perform 16 rounds of cipher function operations
+    for i in 0..16 {
+        // left prime is simply right prior to any transformations
+        let left_prime = right;
+
+        // perform XOR of left with the cipher function on the right block using ith key
+        let right_prime = left ^ cipher_function(&right, &key_schedule[i]);
+
+        // reassign left and right values
+        left = left_prime;
+        right = right_prime;
+    }
+
+    // combine values back to 64 bit value
+    let preoutput_block = combine_2_32_bit_blocks(&left, &right);
+
+    // perform the inverse of the initial permutation
+    // UPDATE THE VALUE TO THE PREOUTPUT BLOCK
+    let output = inverted_permutation(&preoutput_block);
 
     output
 }
@@ -461,5 +523,59 @@ mod tests {
         let concat_value: u64 = concatenate_28_bit_blocks(&c, &d);
         let expected: u64 = 0b0000000011111111111111111111111111111111111111111111111111111111;
         assert_eq!(concat_value, expected);
+    }
+
+    #[test]
+    fn divide_64_bit_block_1() {
+        let test_value: u64 = 0x0000000100000001;
+        let expected: u32 = 0x00000001;
+        let (left, right) = divide_64_bit_block(&test_value);
+        assert_eq!(left, expected);
+        assert_eq!(right, expected);
+    }
+
+    #[test]
+    fn divide_64_bit_block_2() {
+        let test_value: u64 = 0x0000000110000000;
+        let expected_left: u32 = 0x00000001;
+        let expected_right: u32 = 0x10000000;
+        let (left, right) = divide_64_bit_block(&test_value);
+        assert_eq!(left, expected_left);
+        assert_eq!(right, expected_right);
+    }
+
+    #[test]
+    fn divide_64_bit_block_3() {
+        let test_value: u64 = 0xdeadbeefdeadbeef;
+        let expected: u32 = 0xdeadbeef;
+        let (left, right) = divide_64_bit_block(&test_value);
+        assert_eq!(left, expected);
+        assert_eq!(right, expected);
+    }
+
+    #[test]
+    fn combine_2_32_bit_blocks_1() {
+        let left: u32 = 0x00000001;
+        let expected: u64 = 0x0000000100000001;
+        let combined: u64 = combine_2_32_bit_blocks(&left, &left);
+        assert_eq!(combined, expected);
+    }
+
+    #[test]
+    fn combine_2_32_bit_blocks_2() {
+        let left: u32 = 0x00000001;
+        let right: u32 = 0x10000000;
+        let expected: u64 = 0x0000000110000000;
+        let combined: u64 = combine_2_32_bit_blocks(&left, &right);
+        assert_eq!(combined, expected);
+    }
+
+    #[test]
+    fn combine_2_32_bit_blocks_3() {
+        let left: u32 = 0xdeadbeef;
+        let right: u32 = 0xdeadbeef;
+        let expected: u64 = 0xdeadbeefdeadbeef;
+        let combined: u64 = combine_2_32_bit_blocks(&left, &right);
+        assert_eq!(combined, expected);
     }
 }
