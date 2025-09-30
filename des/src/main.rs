@@ -1,5 +1,5 @@
 use rand::Rng;
-use des::{initial_permutation, inverted_permutation, generate_key_schedule, cipher_function};
+use des::{encipher_block, decipher_block, generate_key_schedule};
 
 fn print_bytes(value: &u64) {
     // print out one byte per line
@@ -23,51 +23,8 @@ fn print_bytes(value: &u64) {
     // print a newline after the block
     println!();
 }
-
-fn test_permutation_and_back() {
-    // create the rng
-    let mut rng = rand::rng();
-    let mut failed = false;
-    let test_count = 100;
-
-    // test many values
-    for test_idx in 0..test_count {
-        // gen() generates a value between 0 and u64::MAX
-        let value: u64 = rng.random();
-        let permuted = initial_permutation(&value);
-        let inverted = inverted_permutation(&permuted);
-
-        // on issue, break with good prints
-        if value != inverted {
-            println!("[{}] Failed on value {}", test_idx, value);
-            print_bytes(&value);
-            print_bytes(&inverted);
-            failed = true;
-        }
-    }
-
-    // end print in case all is good
-    if !failed {
-        println!("Passed {} permutation tests successfully!", test_count);
-    }
-}
-
-fn test_key_schedule() {
-    // create the key
-    let mut rng = rand::rng();
-    let key: u64 = rng.random();
-    println!("Using the following key:");
-    print_bytes(&key);
-
-    let key_schedule = generate_key_schedule(&key);
-
-    //for i in 0..16 {
-    //    println!("Iteration {}", i);
-    //    print_bytes(&key_schedule[i]);
-    //}
-}
-
-fn test_encipher() {
+fn encrypt_and_decrypt()
+{
     // create a random key
     let mut rng = rand::rng();
     let key: u64 = rng.random();
@@ -75,18 +32,25 @@ fn test_encipher() {
     print_bytes(&key);
 
     // message to encipher
-    let msg: u32 = 1;
-    println!("Using the following message:");
-    print_bytes(&(msg as u64));
+    let msg: u64 = 1;
+    println!("Using the following message: {}", msg);
+    print_bytes(&msg);
 
-    let ciphertext = cipher_function(&msg, &key);
-    println!("Resulting ciphertext:");
-    print_bytes(&(ciphertext as u64));
+    // generate the key schedule
+    let ks = generate_key_schedule(&key);
+
+    // encrypt the message
+    let encrypted_msg = encipher_block(&msg, &ks);
+    println!("Encrypted message: {}", encrypted_msg);
+    print_bytes(&encrypted_msg);
+
+    // decrypt the message
+    let decrypted_msg = decipher_block(&encrypted_msg, &ks);
+    println!("Decrypted message: {}", decrypted_msg);
+    print_bytes(&decrypted_msg);
 }
 
 fn main() {
     println!("Howdy! Welcome to testing DES :3\n");
-    //test_permutation_and_back();
-    //test_key_schedule();
-    //test_encipher();
+    encrypt_and_decrypt();
 }

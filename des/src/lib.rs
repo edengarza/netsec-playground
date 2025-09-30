@@ -450,12 +450,12 @@ pub fn encipher_block(block: &u64, key_schedule: &[u64; 16]) -> u64 {
     (left, right) = divide_64_bit_block(&initial_permutation_block);
 
     // perform 16 rounds of cipher function operations
-    for i in 0..16 {
+    for key in key_schedule.iter() {
         // left prime is simply right prior to any transformations
         let left_prime = right;
 
         // perform XOR of left with the cipher function on the right block using ith key
-        let right_prime = left ^ cipher_function(&right, &key_schedule[i]);
+        let right_prime = left ^ cipher_function(&right, &key);
 
         // reassign left and right values
         left = left_prime;
@@ -466,8 +466,41 @@ pub fn encipher_block(block: &u64, key_schedule: &[u64; 16]) -> u64 {
     let preoutput_block = combine_2_32_bit_blocks(&left, &right);
 
     // perform the inverse of the initial permutation
-    // UPDATE THE VALUE TO THE PREOUTPUT BLOCK
     let output = inverted_permutation(&preoutput_block);
+
+    output
+}
+
+// main decryption function
+// takes a 64 bit block and a precomputed key schedule
+pub fn decipher_block(block: &u64, key_schedule: &[u64; 16]) -> u64 {
+    let mut left: u32;
+    let mut right: u32;
+
+    // perform the inverted permutation
+    let inverted_permutation_block = inverted_permutation(&block);
+
+    // get the initial left and right components
+    (left, right) = divide_64_bit_block(&inverted_permutation_block);
+
+    // perform 16 rounds of cipher function operations in reverse
+    for key in key_schedule.iter().rev() {
+        // right prime is simple left before any transformations
+        let right_prime = left;
+
+        // perform XOR of right with cipher function on the left block using ith key
+        let left_prime = right ^ cipher_function(&left, &key);
+
+        // reassign left and right values
+        left = left_prime;
+        right = right_prime;
+    }
+
+    // combine values back to 64 bit value
+    let preoutput_block = combine_2_32_bit_blocks(&left, &right);
+
+    // perform the inverse of the inverted permutation
+    let output = initial_permutation(&preoutput_block);
 
     output
 }
