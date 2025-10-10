@@ -16,6 +16,9 @@ use std::path::{
     PathBuf
 }; // for filenames
 use std::env;
+use des::{
+    initial_permutation
+}; // for des library
 
 // +-----------+
 // |  Structs  |
@@ -30,6 +33,11 @@ struct TestConfig {
 // +-----------+
 // |  Helpers  |
 // +-----------+
+
+// print out a formatted TestConfig
+fn print_test_config(config: &TestConfig) {
+    println!("id: {}\nkey: {}\nplaintext: {}\nciphertext: {}\n", config.id, config.key, config.plaintext, config.ciphertext);
+}
 
 // split a string into its non-whitespace components
 fn tokenize_line(line: &str) -> Vec<String> {
@@ -134,7 +142,12 @@ fn process_lines(lines: Lines<BufReader<File>>) -> Vec<TestConfig> {
                 temp_hold.push(tokens[2].clone());
             } else if line.starts_with("[") {
                 // identify the sections, idk if i'm doing anything with them at the moment
-                println!("Section: {}", line);
+                // println!("Section: {}", line);
+
+                // for now, only focus on encryption
+                if line.contains("DECRYPT") {
+                    break;
+                }
             } else {
                 // if not a pre-established beginning, just skip
                 continue;
@@ -162,6 +175,17 @@ fn process_lines(lines: Lines<BufReader<File>>) -> Vec<TestConfig> {
     tests
 }
 
+fn run_test(test: &TestConfig) -> bool {
+    let expected: u64 = test.ciphertext;
+    let actual: u64 = initial_permutation(&test.plaintext);
+    // print_test_config(&test);
+    println!("[{:>03}] Expected: {:25}, Actual: {:25}", test.id, expected, actual);
+
+    true
+    // actual return, uncomment when done testing and want to actually use this
+    // actual == expected
+}
+
 // +--------+
 // |  Main  |
 // +--------+
@@ -178,7 +202,8 @@ fn main() {
     // enumerate the files in given directory
     let files = get_files_in_dir(&dirpath);
     
-    // for each file present in the directory, get the lines and act on them
+    // for each file present in the directory, extract the test configs
+    let mut tests: Vec<TestConfig> = Vec::new();
     for file in files {
         // full the path out
         let full_path = dirpath.join(file);
@@ -187,11 +212,30 @@ fn main() {
         let lines = read_lines(&full_path);
         
         // perform some action on the lines, expecting iterator
-        let tests: Vec<TestConfig> = process_lines(lines);
+        tests.extend(process_lines(lines));
 
         // sanity check prints of test configs
-        for test in tests {
-            println!("id: {}\nkey: {}\nplaintext: {}\nciphertext: {}\n", test.id, test.key, test.plaintext, test.ciphertext);
+        // for test in &tests {
+        //     print_test_config(&test);
+        // }
+    }
+
+    // perform tests using the configs
+    println!("Starting test execution...");
+    let mut success: bool = false;
+    for test in &tests {
+        success = run_test(&test);
+        if !success {
+            println!("Failed on test {}!", test.id);
+            break;
         }
+    }
+    println!("Test execution finished.");
+
+    // final print depends on the test
+    if success {
+        println!("Successful run :)");
+    } else {
+        println!("Unsuccessful run :(");
     }
 }
