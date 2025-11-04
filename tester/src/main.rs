@@ -17,7 +17,9 @@ use std::path::{
 }; // for filenames
 use std::env;
 use des::{
-    initial_permutation
+    decipher_block,
+    encipher_block,
+    generate_key_schedule
 }; // for des library
 
 // +-----------+
@@ -28,6 +30,7 @@ struct TestConfig {
     key: u64,
     plaintext: u64,
     ciphertext: u64,
+    encrypting: bool
 }
 
 // +-----------+
@@ -35,9 +38,10 @@ struct TestConfig {
 // +-----------+
 
 // print out a formatted TestConfig
-fn print_test_config(config: &TestConfig) {
-    println!("id: {}\nkey: {}\nplaintext: {}\nciphertext: {}\n", config.id, config.key, config.plaintext, config.ciphertext);
-}
+// commented out to avoid warning
+// fn print_test_config(config: &TestConfig) {
+//     println!("id: {}\nkey: 0x{:016x}\nplaintext: 0x{:016x}\nciphertext: 0x{:016x}\nencrypting: {}", config.id, config.key, config.plaintext, config.ciphertext, config.encrypting);
+// }
 
 // split a string into its non-whitespace components
 fn tokenize_line(line: &str) -> Vec<String> {
@@ -54,7 +58,7 @@ fn tokenize_line(line: &str) -> Vec<String> {
 
 // determine whether a given string is a valid dir
 fn path_exists_and_is_dir(path: &str) -> bool {
-    Path::new(path).is_dir()    
+    Path::new(path).is_dir()
 }
 
 // function to check the given args
@@ -74,7 +78,7 @@ fn validate_args(args: &Vec<String>) {
 fn get_files_in_dir(dirpath: &Path) -> Vec<String> {
     // the vector to hold the valid paths I want
     let mut files: Vec<String> = Vec::new();
-    
+
     // use read_dir() to get an iterator over entries in a dir
     if let Ok(entries) = fs::read_dir(dirpath) {
         for entry in entries.flatten() {
@@ -88,7 +92,7 @@ fn get_files_in_dir(dirpath: &Path) -> Vec<String> {
             if autosave || backup {
                 continue;
             }
-            
+
             // only add to the vector if it's not another dir
             let metadata = entry.metadata().expect("Could not access file metadata.");
             if !metadata.is_dir() {
@@ -121,7 +125,10 @@ fn process_lines(lines: Lines<BufReader<File>>) -> Vec<TestConfig> {
 
     // vector to hold relevant values
     let mut temp_hold: Vec<String> = Vec::new();
-    
+
+    // value to determine the op
+    let mut encrypting: bool = false;
+
     // go over each line in the file we read
     // map_while() auto stops iterating when an error is encountered
     for line in lines.map_while(Result::ok) {
@@ -129,7 +136,7 @@ fn process_lines(lines: Lines<BufReader<File>>) -> Vec<TestConfig> {
         if line.is_empty() {
             continue;
         }
-        
+
         // determine action based on how the line starts
         if line.starts_with("COUNT") ||
             line.starts_with("KEYs") ||
@@ -141,12 +148,11 @@ fn process_lines(lines: Lines<BufReader<File>>) -> Vec<TestConfig> {
                 // only push the value onto the temp hold
                 temp_hold.push(tokens[2].clone());
             } else if line.starts_with("[") {
-                // identify the sections, idk if i'm doing anything with them at the moment
-                // println!("Section: {}", line);
-
-                // for now, only focus on encryption
+                // set the encrypting variable to know what operation to do
                 if line.contains("DECRYPT") {
-                    break;
+                    encrypting = false;
+                } else {
+                    encrypting = true;
                 }
             } else {
                 // if not a pre-established beginning, just skip
@@ -161,6 +167,7 @@ fn process_lines(lines: Lines<BufReader<File>>) -> Vec<TestConfig> {
                 key: u64::from_str_radix(&temp_hold[1], 16).unwrap(),
                 plaintext: u64::from_str_radix(&temp_hold[2], 16).unwrap(),
                 ciphertext: u64::from_str_radix(&temp_hold[3], 16).unwrap(),
+                encrypting: encrypting,
             };
 
             // clear the temp hold
@@ -176,14 +183,19 @@ fn process_lines(lines: Lines<BufReader<File>>) -> Vec<TestConfig> {
 }
 
 fn run_test(test: &TestConfig) -> bool {
+    let key_schedule: [u64; 16] = generate_key_schedule(&test.key);
     let expected: u64 = test.ciphertext;
-    let actual: u64 = initial_permutation(&test.plaintext);
-    // print_test_config(&test);
-    println!("[{:>03}] Expected: {:25}, Actual: {:25}", test.id, expected, actual);
+    let actual: u64;
+    if test.encrypting {
+        actual = encipher_block(&test.plaintext, &key_schedule);
+    } else {
+        actual = decipher_block(&test.plaintext, &key_schedule);
+    }
+    //print_test_config(&test);
+    println!("[{:>03}] Expected: 0x{:016x}, Actual: 0x{:016x}", test.id, expected, actual);
 
-    true
     // actual return, uncomment when done testing and want to actually use this
-    // actual == expected
+    actual == expected
 }
 
 // +--------+
@@ -195,29 +207,24 @@ fn main() {
     // ensure the given args are valid
     let args: Vec<String> = env::args().collect();
     validate_args(&args);
-    
+
     // path to explore
     let dirpath: &Path = Path::new(&args[1]);
 
     // enumerate the files in given directory
     let files = get_files_in_dir(&dirpath);
-    
+
     // for each file present in the directory, extract the test configs
     let mut tests: Vec<TestConfig> = Vec::new();
     for file in files {
         // full the path out
         let full_path = dirpath.join(file);
-        
-        // read a file and return Result<> holding an iterator 
+
+        // read a file and return Result<> holding an iterator
         let lines = read_lines(&full_path);
-        
+
         // perform some action on the lines, expecting iterator
         tests.extend(process_lines(lines));
-
-        // sanity check prints of test configs
-        // for test in &tests {
-        //     print_test_config(&test);
-        // }
     }
 
     // perform tests using the configs

@@ -1,3 +1,0 @@
-Hello world from the file!
-This is a simple text file to test rust file ops.
-Inshallah there will be more lines after running!

@@ -168,21 +168,40 @@ fn permute_block_64(block: &u64, permutation_vector: &[u8; 64]) -> u64 {
 }
 
 // permute a value held in 64 bits into 48 bits
-// this is used by the key schedule to reduce 56 (concat result) bits to 48
-// this is also used by expansion function to expand 32 bits to 48
+// this is used by expansion function to expand 32 bits to 48
 fn permute_block_48(block: &u64, permutation_vector: &[u8; 48]) -> u64 {
     let mut permuted_block: u64 = 0;
 
     // one iteration for each bit to write
     for i in 0..48 {
         let bit_index = permutation_vector[i] - 1;
-        let bit_value = (block >> (63 - bit_index)) & 1;
+
+        // the values are held in the rightmost bits, so index from there
+        let bit_value = (block >> (31 - bit_index)) & 1;
         let bit_value_expanded = bit_value << (47 - i);
         permuted_block |= bit_value_expanded;
     }
 
     permuted_block
 
+}
+
+// permute a 56 bit value held in 64 bits to 48 bits
+// used during the key schedule generation phase
+fn permute_56_block_to_48(block: &u64, permutation_vector: &[u8; 48]) -> u64 {
+    let mut permuted_block: u64 = 0;
+
+    // one iteration for each bit to write
+    for i in 0..48 {
+        let bit_index = permutation_vector[i] - 1;
+
+        // the values are held in the rightmost bits, so index from there
+        let bit_value = (block >> (55 - bit_index)) & 1;
+        let bit_value_expanded = bit_value << (47 - i);
+        permuted_block |= bit_value_expanded;
+    }
+
+    permuted_block
 }
 
 // permute a 32 bit value into another 32 bit value
@@ -400,7 +419,7 @@ pub fn generate_key_schedule(key: &u64) -> [u64; 16] {
         let cd: u64 = concatenate_28_bit_blocks(&c, &d);
 
         // permute to 48 bits
-        let key: u64 = permute_block_48(&cd, &PC2);
+        let key: u64 = permute_56_block_to_48(&cd, &PC2);
 
         // store in key_schedule array
         key_schedule[i] = key;
@@ -463,7 +482,7 @@ pub fn encipher_block(block: &u64, key_schedule: &[u64; 16]) -> u64 {
     }
 
     // combine values back to 64 bit value
-    let preoutput_block = combine_2_32_bit_blocks(&left, &right);
+    let preoutput_block = combine_2_32_bit_blocks(&right, &left);
 
     // perform the inverse of the initial permutation
     let output = inverted_permutation(&preoutput_block);
@@ -477,19 +496,19 @@ pub fn decipher_block(block: &u64, key_schedule: &[u64; 16]) -> u64 {
     let mut left: u32;
     let mut right: u32;
 
-    // perform the inverted permutation
-    let inverted_permutation_block = inverted_permutation(&block);
+    // perform the initial permutation
+    let initial_permutation_block = initial_permutation(&block);
 
     // get the initial left and right components
-    (left, right) = divide_64_bit_block(&inverted_permutation_block);
+    (left, right) = divide_64_bit_block(&initial_permutation_block);
 
     // perform 16 rounds of cipher function operations in reverse
     for key in key_schedule.iter().rev() {
-        // right prime is simple left before any transformations
-        let right_prime = left;
+        // left prime is simply right prior to any transformations
+        let left_prime = right;
 
-        // perform XOR of right with cipher function on the left block using ith key
-        let left_prime = right ^ cipher_function(&left, &key);
+        // perform XOR of left with the cipher function on the right block using ith key
+        let right_prime = left ^ cipher_function(&right, &key);
 
         // reassign left and right values
         left = left_prime;
@@ -497,10 +516,10 @@ pub fn decipher_block(block: &u64, key_schedule: &[u64; 16]) -> u64 {
     }
 
     // combine values back to 64 bit value
-    let preoutput_block = combine_2_32_bit_blocks(&left, &right);
+    let preoutput_block = combine_2_32_bit_blocks(&right, &left);
 
-    // perform the inverse of the inverted permutation
-    let output = initial_permutation(&preoutput_block);
+    // perform the inverse of the initial permutation
+    let output = inverted_permutation(&preoutput_block);
 
     output
 }
